@@ -2,6 +2,18 @@ import glob
 import sys
 import os
 import re
+import json
+import shutil
+from pyspark import SparkContext
+from pyspark.mllib.classification import SVMWithSGD, SVMModel
+from pyspark.mllib.regression import LabeledPoint
+
+sc = SparkContext(appName="ImageRecognition")
+
+
+def parsePoint(line):
+    values = [float(x) for x in line.split(',')]
+    return LabeledPoint(values[0], values[1:])
 
 
 def split_sets(input_dir, file_pattern, number_for_train):
@@ -9,14 +21,6 @@ def split_sets(input_dir, file_pattern, number_for_train):
     if not os.path.exists(input_dir) and not os.path.isdir(input_dir):
         print("Cannot access feature files directory: {}!".format(input_dir))
         sys.exit(-1)
-
-    """
-    if not os.path.exists(train_dir):
-        os.makedirs(train_dir, 0o755, True)
-
-    if not os.path.exists(test_dir):
-        os.makedirs(test_dir, 0o755, True)
-    """
 
     train_set = {}
     test_set = {}
@@ -40,6 +44,61 @@ def split_sets(input_dir, file_pattern, number_for_train):
     return train_set, test_set
 
 
+def create_features(train_set, test_set, input_dir):
+    if os.path.exists('./features/train_features.txt'):
+        os.remove('./features/train_features.txt')
+    if os.path.exists('./features/test_features.txt'):
+        os.remove('./features/test_features.txt')
+
+    for file_name in train_set['yorkshire_terrier']:
+        with open(input_dir + '/' + file_name, 'r') as d:
+            data = json.load(d)
+            data = '0,' + ",".join(map(str, data))
+            with open('./features/train_features.txt', 'a') as f:
+                print(data, file=f)
+
+    for file_name in train_set['wheaten_terrier']:
+        with open(input_dir + '/' + file_name, 'r') as d:
+            data = json.load(d)
+            data = '1,' + ",".join(map(str, data))
+            with open('./features/train_features.txt', 'a') as f:
+                print(data, file=f)
+
+    for file_name in test_set['yorkshire_terrier']:
+        with open(input_dir + '/' + file_name, 'r') as d:
+            data = json.load(d)
+            data = '0,' + ",".join(map(str, data))
+            with open('./features/test_features.txt', 'a') as f:
+                print(data, file=f)
+
+    for file_name in test_set['wheaten_terrier']:
+        with open(input_dir + '/' + file_name, 'r') as d:
+            data = json.load(d)
+            data = '1,' + ",".join(map(str, data))
+            with open('./features/test_features.txt', 'a') as f:
+                print(data, file=f)
+
+
+def create_model():
+    # Load training data
+    data = sc.textFile('./features/train_features.txt')
+    parsed_data = data.map(parsePoint)
+
+    # Build the model
+    model = SVMWithSGD.train(parsed_data, iterations=100)
+
+    # Evaluate the model on training data
+    labels_and_preds = parsed_data.map(lambda p: (p.label, model.predict(p.features)))
+    train_err = labels_and_preds.filter(lambda lp: lp[0] != lp[1]).count() / float(parsed_data.count())
+    print("Training Error = " + str(train_err))
+
+    if os.path.exists('./model/ImageRecognitionModel') and os.path.isdir('./model/ImageRecognitionModel'):
+        shutil.rmtree('./model/ImageRecognitionModel')
+
+    # Save and load model
+    model.save(sc, './model/ImageRecognitionModel')
+
+
 def usage(prog):
     print("Usage: " + prog + " --dir <input_directory> --size <train_size_by_class>")
 
@@ -47,12 +106,13 @@ def usage(prog):
 def main():
     i = 0
     args = sys.argv[1:]
-    if len(args) != 4:
+    if len(args) != 4 and len(args) != 1:
         usage(sys.argv[0])
         sys.exit(-1)
 
     input_dir = ""
     size = 0
+    test_data = False
     while i < len(args):
         if args[i] == "--dir":
             i += 1
@@ -67,16 +127,28 @@ def main():
                 sys.exit(-1)
             else:
                 size = int(args[i])
+        elif args[i] == "--test":
+            test_data = True
 
         i += 1
 
-    train_set, test_set = split_sets(input_dir, "*.json", size)
+    if size > 0:
 
-    print("train_set size: {}".format(len(train_set.keys())))
-    print("train_set[0] size: {}".format(len(train_set[list(train_set)[0]])))
+        train_set, test_set = split_sets(input_dir, "*.json", size)
 
-    print("test_set size: {}".format(len(test_set.keys())))
-    print("test_set[0] size: {}".format(len(test_set[list(test_set)[0]])))
+        create_features(train_set, test_set, input_dir)
+
+        create_model()
+
+    if test_data:
+        # Load test data
+        data = sc.textFile('./features/test_features.txt')
+        parsed_data = data.map(parsePoint)
+        model = SVMModel.load(sc, './model/ImageRecognitionModel')
+        # Test the model on training data
+        labels_and_preds = parsed_data.map(lambda p: (p.label, model.predict(p.features)))
+        test_err = labels_and_preds.filter(lambda lp: lp[0] != lp[1]).count() / float(parsed_data.count())
+        print("Test Error = " + str(test_err * 100) + "%")
 
 
 if __name__ == "__main__":
