@@ -11,7 +11,7 @@ from pyspark.mllib.regression import LabeledPoint
 sc = SparkContext(appName="ImageRecognition")
 
 
-def parsePoint(line):
+def make_labeled_point(line):
     values = [float(x) for x in line.split(',')]
     return LabeledPoint(values[0], values[1:])
 
@@ -82,7 +82,7 @@ def create_features(train_set, test_set, input_dir):
 def create_model():
     # Load training data
     data = sc.textFile('./features/train_features.txt')
-    parsed_data = data.map(parsePoint)
+    parsed_data = data.map(make_labeled_point)
 
     # Build the model
     model = SVMWithSGD.train(parsed_data, iterations=100)
@@ -143,7 +143,7 @@ def main():
     if test_data:
         # Load test data
         data = sc.textFile('./features/test_features.txt')
-        parsed_data = data.map(parsePoint)
+        parsed_data = data.map(make_labeled_point)
         # Load the model
         model = SVMModel.load(sc, './model/ImageRecognitionModel')
         # Test the model on test data
