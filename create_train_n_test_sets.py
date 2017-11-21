@@ -95,7 +95,7 @@ def create_model():
     if os.path.exists('./model/ImageRecognitionModel') and os.path.isdir('./model/ImageRecognitionModel'):
         shutil.rmtree('./model/ImageRecognitionModel')
 
-    # Save and load model
+    # Save the model
     model.save(sc, './model/ImageRecognitionModel')
 
 
