@@ -146,7 +146,7 @@ def main():
         parsed_data = data.map(make_labeled_point)
         # Load the model
         model = SVMModel.load(sc, './model/ImageRecognitionModel')
-        # Test the model on test data
+        # Try the model against test data
         labels_and_preds = parsed_data.map(lambda p: (p.label, model.predict(p.features)))
         test_err = labels_and_preds.filter(lambda lp: lp[0] != lp[1]).count() / float(parsed_data.count())
         print("Test Error = " + str(test_err * 100) + "%")
