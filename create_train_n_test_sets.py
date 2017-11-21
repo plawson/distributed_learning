@@ -144,8 +144,9 @@ def main():
         # Load test data
         data = sc.textFile('./features/test_features.txt')
         parsed_data = data.map(parsePoint)
+        # Load the model
         model = SVMModel.load(sc, './model/ImageRecognitionModel')
-        # Test the model on training data
+        # Test the model on test data
         labels_and_preds = parsed_data.map(lambda p: (p.label, model.predict(p.features)))
         test_err = labels_and_preds.filter(lambda lp: lp[0] != lp[1]).count() / float(parsed_data.count())
         print("Test Error = " + str(test_err * 100) + "%")
