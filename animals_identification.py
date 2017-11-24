@@ -14,9 +14,9 @@ fs_config = {
     "root_directory": "/home/hadoopuser/projects/project2/distributed_learning/animals_identification/",
     "label_directory": "label/",
     "one_vs_one_model_directory": "one_model",
-    "one_vs_one_label_filename":  "one_file.json",
+    "one_vs_one_label_filename": "one_file.json",
     "one_vs_all_model_directory": "all_model",
-    "one_vs_all_label_filename":  "all_file.json",
+    "one_vs_all_label_filename": "all_file.json",
     "feature_directory": "features/",
     "train_one_feature_filename": "train_one_features.txt",
     "test_one_feature_filename": "test_one_features.txt",
@@ -25,13 +25,17 @@ fs_config = {
 }
 
 
+def make_label_point_from_list(line):
+    values = [float(x) for x in line.split(',')]
+    return LabeledPoint(20000.0, values)
+
+
 def make_labeled_point(line):
     values = [float(x) for x in line.split(',')]
     return LabeledPoint(values[0], values[1:])
 
 
 def split_sets(input_dir, file_pattern, number_for_train):
-
     if not os.path.exists(input_dir) and not os.path.isdir(input_dir):
         print("Cannot access feature files directory: {}!".format(input_dir))
         sys.exit(-1)
@@ -59,7 +63,6 @@ def split_sets(input_dir, file_pattern, number_for_train):
 
 
 def create_features(train_set, test_set, input_dir, config, class1, class2):
-
     # Create the feature directory is it doesn't exists
     if not os.path.exists(config['root_directory'] + config['feature_directory']):
         os.mkdir(config['root_directory'] + config['feature_directory'], 0o700)
@@ -126,7 +129,12 @@ def create_features(train_set, test_set, input_dir, config, class1, class2):
 
 def create_model(config, class1, class2):
     # Load training data
-    train_feature_path = config['root_directory'] + config['feature_directory'] + config['train_feature_filename']
+    if len(class1) > 0 and len(class2) > 0:
+        train_feature_path = config['root_directory'] + config['feature_directory'] + config[
+            'train_one_feature_filename']
+    else:
+        train_feature_path = config['root_directory'] + config['feature_directory'] + config[
+            'train_all_feature_filename']
     data = sc.textFile(train_feature_path)
     parsed_data = data.map(make_labeled_point)
 
@@ -220,17 +228,40 @@ def check_image(config, json_file):
     label_path = config['root_directory'] + config['label_directory'] + config['one_vs_all_label_filename']
 
     if not os.path.exists(model_path):
-        print('No model for all test')
+        print('No model with the full set')
         sys.exit(-1)
 
     if not os.path.exists(label_path):
-        print('No label for all test')
+        print('No label for with the full set')
         sys.exit(-1)
 
     with open(label_path, "r") as label_file:
         labels = dict(json.load(label_file))
 
-    inv_labels = {v: k for k, v in labels.items()}
+    # inv_labels = {v: k for k, v in labels.items()}
+
+    """
+    rdd = sc.textFile(json_file)\
+        .map(lambda line: ((line[1:])[:-1]))\
+        .flatMap(make_float_list)
+
+    model = SVMModel.load(sc, model_path)
+
+    label = model.predict(rdd)
+    """
+
+    with open(json_file) as features_file:
+        features = json.load(features_file)
+
+    lp = make_label_point_from_list(",".join(map(str, features)))
+    model = SVMModel.load(sc, model_path)
+    label = model.predict(lp.features)
+
+    print("=" * 60)
+    print("Image features file: {}".format(json_file))
+    print("Label: {}".format(label))
+    print("Prediction: {}".format(labels[str(label)]))
+    print("=" * 60)
 
 
 def usage(prog):
@@ -311,7 +342,6 @@ def main():
         sys.exit(-1)
 
     if size > 0:
-
         train_set, test_set = split_sets(input_dir, "*.json", size)
 
         create_features(train_set, test_set, input_dir, fs_config, class1, class2)
@@ -323,6 +353,13 @@ def main():
 
     if len(class1) > 0 and len(class2) > 0:
         test_one_vs_one(fs_config, class1, class2)
+
+    if len(check_data) > 0:
+        if not os.path.exists(check_data):
+            print("Cannot access image feature {}".format(check_data))
+            sys.exit(-1)
+        else:
+            check_image(fs_config, check_data)
 
 
 if __name__ == "__main__":
