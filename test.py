@@ -80,11 +80,8 @@ def main():
 
     #keras_model = load_keras_model(app_config)
 
-    # image.load_img('s3://oc-plawson/distributed_learning/images/yorkshire_terrier_86.jpg', target_size=(224, 224))
-
-    # local_image_dir = './' + str(uuid.uuid4())
-    local_image_dir = './d7f2680c-270b-44cd-bed5-a2855c4ad56d'
-    # get_image_files(app_config, local_image_dir)
+    local_image_dir = './' + str(uuid.uuid4())
+    get_image_files(app_config, local_image_dir)
     create_features(app_config, local_image_dir)
 
     # rdd = sc.parallelize(get_image_list(app_config))
