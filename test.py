@@ -50,10 +50,7 @@ def create_features(config, local_image_dir):
     base_model = VGG16(weights='imagenet')
     model = Model(input=base_model.input, output=base_model.get_layer('fc2').output)
     s3 = boto3.resource('s3')
-    i = 0
     for file in os.listdir(local_image_dir):
-        if i > 0:
-            break
         image_path = local_image_dir + config['sep'] + file
         img = image.load_img(image_path, target_size=(224, 224))
         x = image.img_to_array(img)
@@ -63,7 +60,6 @@ def create_features(config, local_image_dir):
         print(json.dumps(features.tolist()[0]))
         s3.Object(config['bucket'], config['features_json_dir'] + config['sep'] + file + ".json")\
             .put(Body=json.dumps(features.tolist()[0]))
-        i += 1
 
 
 def main():
