@@ -62,6 +62,22 @@ def create_features(config, local_image_dir):
             .put(Body=json.dumps(features.tolist()[0]))
 
 
+def create_feature(file):
+    s3 = boto3.resource('s3')
+    base_model = VGG16(weights='imagenet')
+    model = Model(input=base_model.input, output=base_model.get_layer('fc2').output)
+    local_file = './' + str(uuid.uuid4()) + os.path.basename(file)
+    s3.Bucket(config['bucket']).download_file(file, local_file)
+    img = image.load_img(local_file, target_size=(224, 224))
+    x = image.img_to_array(img)
+    x = np.expand_dims(x, axis=0)
+    x = preprocess_input(x)
+    features = model.predict(x)
+    s3.Object(config['bucket'], config['features_json_dir2'] + config['sep'] + os.path.basename(file) + ".json") \
+        .put(Body=json.dumps(features.tolist()[0]))
+    os.remove(local_file)
+
+
 def main():
     # Application configuration
     app_config = {
