@@ -35,19 +35,39 @@ def create_features(config):
         model = Model(input=base_model.input, output=base_model.get_layer('fc2').output)
         features = model.predict(x)  # Generate the features
         # Save the features to a JSON file
+        pos_last_slash = len(obj.key) - obj.key[::-1].find("/")
+        filename = obj.key[pos_last_slash:]
+        suffix = ".jpg"
+        len_suffix = len(suffix)
+        pos_last_underscore = len(filename) - filename[::-1].find("_")
+        num_file = int(filename[pos_last_underscore:-len_suffix])
+        breed_name = filename[:(pos_last_underscore - 1)]
         s3.Object(config['bucket'], config['features_key'] + config['sep']
                   + obj.key[(len(obj.key) - obj.key[::-1].find("/")):] + ".json") \
-            .put(Body=json.dumps(features.tolist()[0]))
+            .put(Body=breed_name + ':' + str(num_file) + ':' + json.dumps(features.tolist()[0]))
 
 
-def is_s3_object_exists(bucket, file):
+def s3_object_exists(bucket, file):
     client = boto3.client('s3')
     results = client.list_objects(Bucket=bucket, Prefix=file)
     return 'Contents' in results
 
 
-def do_1vs1(class_one, class_two, size, num_iter, aconfig):
-    print('=' * 40)
+def read_json_file(line):
+    filename = line[0]
+    pos_last_slash = len(filename) - filename[::-1].find("/")
+    filename = filename[pos_last_slash:]
+    suffix = ".jpg.json"
+    len_suffix = len(suffix)
+    pos_last_underscore = len(filename) - filename[::-1].find("_")
+    numfile = int(filename[pos_last_underscore:-len_suffix])
+    breedname = filename[:(pos_last_underscore - 1)]
+
+
+def do_1vs1(class_one, class_two, size, num_iter, config):
+    features_path = config['protocol'] + config['bucket'] + config['sep'] + config['features_key']
+    rdd_all = sc.textFile(features_path)
+    print(rdd_all.collect()[0])
 
 
 def main():
@@ -56,7 +76,7 @@ def main():
         "bucket": "oc-plawson",
         "image_key": "distributed_learning/images",
         "sep": "/",
-        "features_key": "distributed_learning/json"
+        "features_key": "distributed_learning/json2"
     }
 
     # Define command line parameters
@@ -68,15 +88,16 @@ def main():
     parser.add_argument('--iter', required=True, help="Number of iterations", type=int)
 
     # Parse and check command line arguments
+    print('Parsing command line parameters...')
     args = parser.parse_args()
 
     # Register input parameters' value
     size = args.size
     num_iter = args.iter
     classx_classy = vars(args)['1vs1']
-    classall = vars(args)['1vsAll']
+    class_all = vars(args)['1vsAll']
 
-    # Process 1vs1 case
+    # Process 1vs1 command line parameters
     class_one = None
     class_two = None
     if None is not classx_classy:
@@ -91,6 +112,14 @@ def main():
             sys.exit(-1)
         class_one = classx_classy[0:classx_classy.find(',')].strip()
         class_two = classx_classy[(classx_classy.find(',') + 1):].strip()
+
+    if not s3_object_exists(config['bucket'], config['features_key']):
+        print('Creating all features...')
+        create_features(config)
+
+    if None is not classx_classy:
+        print('Execuiting 1VS1')
+        do_1vs1(class_one, class_two, size, num_iter, config)
 
 
 if __name__ == "__main__":
