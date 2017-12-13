@@ -16,69 +16,50 @@ import json
 import shutil
 import argparse
 
-config = {
-    "protocol": "s3n://",
-    "bucket": "oc-plawson",
-    "image_key": "distributed_learning/test_images",
-    "sep": "/",
-    "features_json_dir": "distributed_learning/json",
-    "features_json_dir2": "distributed_learning/json2"
-}
 
 sc = SparkContext(appName="animals_identification")
 
 
-def read_jpg_file(line):
-    # extracting number of the file and the breedname
-    filename = line[0]
-    pos_last_slash = len(filename) - filename[::-1].find("/")
-    filename = filename[pos_last_slash:]
-    suffixe = ".jpg"
-    len_suffixe = len(suffixe)
-    pos_last_underscore = len(filename) - filename[::-1].find("_")
-    numfile = int(filename[pos_last_underscore:-len_suffixe])
-    breedname = filename[:(pos_last_underscore-1)]
-    # extracting features from jpg #inspect.getsourcelines(image.load_img)
-    target_size = (224, 224)
-    img = image.pil_image.open(BytesIO(line[1]))  # img = np.asarray(PIL.Image.open(StringIO(raw_img)))
-    img = img.resize(target_size)
-    x = image.img_to_array(img)
-    x = np.expand_dims(x, axis=0)
-    x = preprocess_input(x)
-    # the model must be instantiate directly in the function
-    base_model = VGG16(weights='imagenet')
-    model = Model(input=base_model.input, output=base_model.get_layer('fc2').output)
-    features = model.predict(x)
-    features = np.asarray(features.tolist()[0])
-    return numfile, breedname, features
+def create_features(config):
+    s3 = boto3.resource('s3')
+    base_model = VGG16(weights='imagenet')  # download the keras model
+    bucket = s3.Bucket(config['bucket'])
+
+    for obj in bucket.objects.filter(Prefix=config['image_key']):  # Read all jpeg files for the bucket key
+        target_size = (224, 224)
+        img = image.pil_image.open(BytesIO(obj.get()['Body'].read()))
+        img = img.resize(target_size)
+        x = image.img_to_array(img)
+        x = np.expand_dims(x, axis=0)
+        x = preprocess_input(x)
+        model = Model(input=base_model.input, output=base_model.get_layer('fc2').output)
+        features = model.predict(x)  # Generate the features
+        # Save the features to a JSON file
+        s3.Object(config['bucket'], config['features_key'] + config['sep']
+                  + obj.key[(len(obj.key) - obj.key[::-1].find("/")):] + ".json") \
+            .put(Body=json.dumps(features.tolist()[0]))
 
 
-def get_all_features(aconfig):
-    binary_files_path = aconfig['protocol'] + aconfig['bucket'] + aconfig['sep'] + aconfig['image_key']
-    rdd_all = sc.binaryFiles(binary_files_path, minPartitions=8) \
-        .map(read_jpg_file).persist()
-    # rdd_all = sc.binaryFiles(binary_files_path)
-    return rdd_all
+def is_s3_object_exists(bucket, file):
+    client = boto3.client('s3')
+    results = client.list_objects(Bucket=bucket, Prefix=file)
+    return 'Contents' in results
 
 
 def do_1vs1(class_one, class_two, size, num_iter, aconfig):
     print('=' * 40)
-    print('Reading training data...')
-    rdd_train = get_all_features(aconfig) \
-            .filter(lambda data: data[0] <= size and (data[1] == class_one or data[1] == class_two)) \
-            .map(lambda data: LabeledPoint((0.0 if data[1] == class_one else 1.0), data[2]))
-    print('=' * 40)
-    print('Reading test data...')
-    rdd_test = get_all_features(config) \
-            .filter(lambda data: data[0] > size and (data[1] == class_one or data[1] == class_two)) \
-            .map(lambda data: LabeledPoint((0.0 if data[1] == class_one else 1.0), data[2]))
-
-    print('=' * 40)
-    print('Generating keras model for training data...')
-    model = SVMWithSGD.train(rdd_train, num_iter)
 
 
 def main():
+    config = {
+        "protocol": "s3://",
+        "bucket": "oc-plawson",
+        "image_key": "distributed_learning/images",
+        "sep": "/",
+        "features_key": "distributed_learning/json"
+    }
+
+    # Define command line parameters
     parser = argparse.ArgumentParser()
     group_class = parser.add_mutually_exclusive_group(required=True)
     group_class.add_argument('--1vs1', help="Classification type, provide classX,classY")
@@ -86,13 +67,16 @@ def main():
     parser.add_argument('--size', required=True, help="Size of the training set", type=int)
     parser.add_argument('--iter', required=True, help="Number of iterations", type=int)
 
+    # Parse and check command line arguments
     args = parser.parse_args()
 
+    # Register input parameters' value
     size = args.size
     num_iter = args.iter
     classx_classy = vars(args)['1vs1']
     classall = vars(args)['1vsAll']
 
+    # Process 1vs1 case
     class_one = None
     class_two = None
     if None is not classx_classy:
@@ -107,7 +91,6 @@ def main():
             sys.exit(-1)
         class_one = classx_classy[0:classx_classy.find(',')].strip()
         class_two = classx_classy[(classx_classy.find(',') + 1):].strip()
-        do_1vs1(class_one, class_two, size, num_iter, config)
 
 
 if __name__ == "__main__":

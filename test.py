@@ -78,6 +78,39 @@ def create_feature(file):
     os.remove(local_file)
 
 
+def read_jpg_file(line):
+    # extracting number of the file and the breedname
+    filename = line[0]
+    pos_last_slash = len(filename) - filename[::-1].find("/")
+    filename = filename[pos_last_slash:]
+    suffixe = ".jpg"
+    len_suffixe = len(suffixe)
+    pos_last_underscore = len(filename) - filename[::-1].find("_")
+    numfile = int(filename[pos_last_underscore:-len_suffixe])
+    breedname = filename[:(pos_last_underscore - 1)]
+    # extracting features from jpg #inspect.getsourcelines(image.load_img)
+    target_size = (224, 224)
+    img = image.pil_image.open(BytesIO(line[1]))  # img = np.asarray(PIL.Image.open(StringIO(raw_img)))
+    img = img.resize(target_size)
+    x = image.img_to_array(img)
+    x = np.expand_dims(x, axis=0)
+    x = preprocess_input(x)
+    # the model must be instantiate directly in the function
+    base_model = VGG16(weights='imagenet')
+    model = Model(input=base_model.input, output=base_model.get_layer('fc2').output)
+    features = model.predict(x)
+    features = np.asarray(features.tolist()[0])
+    return numfile, breedname, features
+
+
+def get_all_features(aconfig):
+    binary_files_path = aconfig['protocol'] + aconfig['bucket'] + aconfig['sep'] + aconfig['image_key']
+    rdd_all = sc.binaryFiles(binary_files_path, minPartitions=8) \
+        .map(read_jpg_file).persist()
+    # rdd_all = sc.binaryFiles(binary_files_path)
+    return rdd_all
+
+
 def main():
     # Application configuration
     app_config = {
