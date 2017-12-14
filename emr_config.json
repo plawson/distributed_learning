@@ -20,7 +20,7 @@
     {
     "Classification": "spark-log4j",
     "Properties": {
-        "log4j.rootCategory": "ERROR, console"
+        "log4j.rootCategory": "WARN, console"
     },
     "Configurations":[]
     }
