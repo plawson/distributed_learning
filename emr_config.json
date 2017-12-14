@@ -16,5 +16,12 @@
                 }
             }
         ]
+    },
+    {
+    "Classification": "spark-log4j",
+    "Properties": {
+        "log4j.rootCategory": "ERROR, console"
+    },
+    "Configurations":[]
     }
 ]
