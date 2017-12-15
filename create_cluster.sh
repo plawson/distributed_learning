@@ -7,7 +7,7 @@ aws emr create-cluster \
         --release-label emr-5.10.0 \
         --log-uri 's3n://aws-logs-641700350459-eu-west-1/elasticmapreduce/' \
         --name 'Cluster OC project 2' \
-        --instance-groups '[{"InstanceCount":1,"InstanceGroupType":"MASTER","InstanceType":"m3.xlarge","Name":"Master Instance Group"},{"InstanceCount":2,"InstanceGroupType":"CORE","InstanceType":"m3.xlarge","Name":"Core Instance Group"}]' \
+        --instance-groups '[{"InstanceCount":1,"InstanceGroupType":"MASTER","InstanceType":"m3.xlarge","Name":"Master Instance Group"},{"InstanceCount":4,"InstanceGroupType":"CORE","InstanceType":"m3.xlarge","Name":"Core Instance Group"}]' \
         --configurations file://./emr_config.json \
         --scale-down-behavior TERMINATE_AT_TASK_COMPLETION \
         --region eu-west-1 \
