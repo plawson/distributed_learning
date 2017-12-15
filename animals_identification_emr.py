@@ -12,7 +12,6 @@ import sys
 import json
 import argparse
 
-
 sc = SparkContext(appName="animals_identification")
 
 
@@ -86,21 +85,26 @@ def s3_object_exists(bucket, file):
 
 def do_1vs1(class_one, class_two, size, num_iter, config):
     features_path = config['protocol'] + config['bucket'] + config['sep'] + config['features_key']
+    print('do_1vs1 ==============> Setting RDD_ALL')
     rdd_all = sc.textFile(features_path).map(lambda line: line.split(',')).persist()
+    print('do_1vs1 ==============> Setting RDD_TRAIN_SET')
     rdd_train_set = rdd_all.filter(lambda elements: int(elements[1]) <= size and (elements[0] == class_one
-                                   or elements[0] == class_two)) \
+                                                                                  or elements[0] == class_two)) \
         .map(lambda elements: ['0.0' if elements[0] == class_one else '1.0'] + elements[2:]) \
         .map(make_labeled_point)
 
-    rdd_test_set = rdd_all.filter(lambda elements: int(elements[1]) > size and (elements[0] == class_one
-                                    or elements[0] == class_two)) \
+    print('do_1vs1 ==============> Setting RDD_TEST_SET')
+    rdd_test_set = rdd_all.filter(lambda elements: size < int(elements[1]) <= (size * 2)
+                                                   and (elements[0] == class_one or elements[0] == class_two)) \
         .map(lambda elements: ['0.0' if elements[0] == class_one else '1.0'] + elements[2:]) \
         .map(make_labeled_point)
 
     # Build the model
+    print('do_1vs1 ==============> Building SVM Model')
     model = SVMWithSGD.train(rdd_train_set, iterations=num_iter)
 
     # Evaluate the model on th test data
+    print('do_1vs1 ==============> Evaluating test set')
     labels_and_preds = rdd_test_set.map(lambda p: (p.label, model.predict(p.features)))
     train_err = labels_and_preds.filter(lambda lp: lp[0] != lp[1]).count() / float(rdd_test_set.count())
     print("Test Error = " + str(train_err))
