@@ -188,6 +188,7 @@ def main():
             print('Executing 1VSALL, size: {}...'.format(str(size)))
             results.append(do_1vsall(class_all, size, num_iter, config))
 
+    print('=' * 100)
     for result in results:
         print('{},{}'.format(str(result[0]), str(result[1])))
 
