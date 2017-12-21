@@ -62,7 +62,7 @@ def do_1vs1(class_one, class_two, size, num_iter, config):
         .map(make_labeled_point)
 
     print('do_1vs1 ==============> Setting RDD_TEST_SET')
-    rdd_test_set = rdd_all.filter(lambda features: size < int(features[1]) <= (size * 2) and (features[0] == class_one
+    rdd_test_set = rdd_all.filter(lambda features: size < int(features[1]) and (features[0] == class_one
                                                                                               or features[0]
                                                                                               == class_two)) \
         .map(lambda features: ['0.0' if features[0] == class_one else '1.0'] + features[2:]) \
@@ -88,6 +88,7 @@ def do_1vs1(class_one, class_two, size, num_iter, config):
     # print("Test Error = " + str(train_err))
     success = round(((1 - train_err) * 100), 2)
     print('{},{}'.format(str(size), str(success)))
+    return size, success
 
 
 def do_1vsall(class_all, size, num_iter, config):
@@ -100,7 +101,7 @@ def do_1vsall(class_all, size, num_iter, config):
         .map(make_labeled_point)
 
     print('do_1vsall ==============> Setting RDD_TEST_SET')
-    rdd_test_set = rdd_all.filter(lambda features: size < int(features[1]) <= (size * 2)) \
+    rdd_test_set = rdd_all.filter(lambda features: size < int(features[1])) \
         .map(lambda features: ['0.0' if features[0] == class_all else '1.0'] + features[2:]) \
         .map(make_labeled_point)
 
@@ -124,6 +125,7 @@ def do_1vsall(class_all, size, num_iter, config):
     # print("Test Error = " + str(train_err))
     success = round(((1 - train_err) * 100), 2)
     print('{},{}'.format(str(size), str(success)))
+    return size, success
 
 
 def main():
@@ -174,15 +176,20 @@ def main():
         print('Creating all features...')
         create_features(config)
 
+    results = []
+
     if None is not classx_classy:
         for size in [int(x.strip()) for x in size_str.split(',')]:
             print('Execuiting 1VS1, size: {}...'.format(str(size)))
-            do_1vs1(class_one, class_two, size, num_iter, config)
+            results.append(do_1vs1(class_one, class_two, size, num_iter, config))
 
     if None is not class_all:
         for size in [int(x.strip()) for x in size_str.split(',')]:
             print('Executing 1VSALL, size: {}...'.format(str(size)))
-            do_1vsall(class_all, size, num_iter, config)
+            results.append(do_1vsall(class_all, size, num_iter, config))
+
+    for result in results:
+        print('{},{}'.format(str(result[0]), str(result[1])))
 
 
 if __name__ == "__main__":
