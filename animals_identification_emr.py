@@ -11,6 +11,9 @@ import numpy as np
 import sys
 import json
 import argparse
+import matplotlib as mpl
+mpl.use('Agg')  # Headless matplotlib usage
+import matplotlib.pyplot as plt
 
 sc = SparkContext(appName="animals_identification")
 
@@ -49,6 +52,28 @@ def s3_object_exists(bucket, file):
     client = boto3.client('s3')
     results = client.list_objects(Bucket=bucket, Prefix=file)
     return 'Contents' in results
+
+
+def save_graph(results, title, key, config):
+    print('save_graph ==============> graph file: {}{}{}{}{}'.format(config['bucket'], config['sep'],
+                                                                     config['graph_key'], config['sep'], key))
+    x_size = []
+    y_percent = []
+    for values in results:
+        x_size.append(values[0])
+        y_percent.append(values[1])
+
+    plt.figure()
+    plt.suptitle(title)
+    plt.xlabel('Taille du train set')
+    plt.ylabel('Pourcentage de réussite')
+    plt.plot(x_size, y_percent, 'r')
+    plt.xticks(x_size)
+    graph = BytesIO()
+    plt.savefig(graph, format='jpg')
+    graph.seek(0)  # Move the memory stream pointer to the beginning
+    s3 = boto3.resource('s3')
+    s3.Object(config['bucket'], config['graph_key'] + config['sep'] + key).put(Body=graph)
 
 
 def do_1vs1(class_one, class_two, size, num_iter, config):
@@ -135,7 +160,8 @@ def main():
         "image_key": "distributed_learning/images",
         "sep": "/",
         "features_key": "distributed_learning/features",
-        "model_key": "distributed_learning/svm_models"
+        "model_key": "distributed_learning/svm_models",
+        "graph_key": "distributed_learning/graph"
     }
 
     # Define command line parameters
@@ -145,6 +171,7 @@ def main():
     group_class.add_argument('--1vsAll', help="Classification type, provide classX")
     parser.add_argument('--size', required=True, help="Sizes of the training set separated by commas")
     parser.add_argument('--iter', help="Number of iterations", type=int, default=100)
+    parser.add_argument('--graph', help="Create a classification performance graph", action="store_true")
 
     # Parse and check command line arguments
     print('Parsing command line parameters...')
@@ -177,20 +204,25 @@ def main():
         create_features(config)
 
     results = []
+    graph_name = None
+    title = None
 
     if None is not classx_classy:
         for size in [int(x.strip()) for x in size_str.split(',')]:
             print('Execuiting 1VS1, size: {}...'.format(str(size)))
             results.append(do_1vs1(class_one, class_two, size, num_iter, config))
+            title = 'Pourcentage de classifications réussies selon la taille du train set en 1 vs 1'
+            graph_name = '{}_{}_1vs1_classification_perf.jpg'.format(class_one, class_two)
 
     if None is not class_all:
         for size in [int(x.strip()) for x in size_str.split(',')]:
             print('Executing 1VSALL, size: {}...'.format(str(size)))
             results.append(do_1vsall(class_all, size, num_iter, config))
+            title = 'Pourcentage de classifications réussies selon la taille du train set en 1 vs all'
+            graph_name = '{}_1vsall_classification_perf.jpg'.format(class_all)
 
-    print('=' * 100)
-    for result in results:
-        print('{},{}'.format(str(result[0]), str(result[1])))
+    if args.graph:
+        save_graph(results, title, graph_name, config)
 
 
 if __name__ == "__main__":

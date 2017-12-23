@@ -8,3 +8,4 @@ sudo /usr/local/bin/pip3 install tensorflow
 sudo /usr/local/bin/pip3 install h5py
 sudo /usr/local/bin/pip3 install pillow
 sudo /usr/local/bin/pip3 install boto3
+sudo /usr/local/bin/pip3 install matplotlib
